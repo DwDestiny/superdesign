@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ClaudeCodeService } from '../services/claudeCodeService';
 import { ChatMessageService } from '../services/chatMessageService';
+import { deriveProviderFromModel, getDefaultModelByProvider } from '../services/modelProviderUtils';
 import { generateWebviewHtml } from '../templates/webviewTemplate';
 import { WebviewContext } from '../types/context';
 import { AgentService } from '../types/agent';
@@ -90,6 +91,9 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
                     case 'changeProvider':
                         await this.handleChangeProvider(message.model, webviewView.webview);
                         break;
+                    case 'configureCustomOpenAIModel':
+                        await this.handleConfigureCustomOpenAIModel(webviewView.webview);
+                        break;
                 }
             }
         );
@@ -99,22 +103,9 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
         const config = vscode.workspace.getConfiguration('superdesign');
         const currentProvider = config.get<string>('aiModelProvider', 'anthropic');
         const currentModel = config.get<string>('aiModel');
-        
-        // If no specific model is set, use defaults
-        let defaultModel: string;
-        switch (currentProvider) {
-            case 'openai':
-                defaultModel = 'gpt-4o';
-                break;
-            case 'openrouter':
-                defaultModel = 'anthropic/claude-3-7-sonnet-20250219';
-                break;
-            case 'anthropic':
-            default:
-                defaultModel = 'claude-3-5-sonnet-20241022';
-                break;
-        }
-        
+
+        const defaultModel = getDefaultModelByProvider(currentProvider);
+
         webview.postMessage({
             command: 'currentProviderResponse',
             provider: currentProvider,
@@ -125,29 +116,40 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     private async handleChangeProvider(model: string, webview: vscode.Webview) {
         try {
             const config = vscode.workspace.getConfiguration('superdesign');
-            
+
+            if (model === '__custom-openai-compatible__') {
+                await this.handleConfigureCustomOpenAIModel(webview);
+                return;
+            }
+
             // Determine provider and API key based on model
-            let provider: string;
+            const provider = deriveProviderFromModel(model);
             let apiKeyKey: string;
             let configureCommand: string;
             let displayName: string;
-            
-            if (model.includes('/')) {
-                // OpenRouter model (contains slash like "openai/gpt-4o")
-                provider = 'openrouter';
-                apiKeyKey = 'openrouterApiKey';
-                configureCommand = 'superdesign.configureOpenRouterApiKey';
-                displayName = `OpenRouter (${this.getModelDisplayName(model)})`;
-            } else if (model.startsWith('claude-')) {
-                provider = 'anthropic';
-                apiKeyKey = 'anthropicApiKey';
-                configureCommand = 'superdesign.configureApiKey';
-                displayName = `Anthropic (${this.getModelDisplayName(model)})`;
-            } else {
-                provider = 'openai';
-                apiKeyKey = 'openaiApiKey';
-                configureCommand = 'superdesign.configureOpenAIApiKey';
-                displayName = `OpenAI (${this.getModelDisplayName(model)})`;
+
+            switch (provider) {
+                case 'openrouter':
+                    apiKeyKey = 'openrouterApiKey';
+                    configureCommand = 'superdesign.configureOpenRouterApiKey';
+                    displayName = `OpenRouter (${this.getModelDisplayName(model)})`;
+                    break;
+                case 'anthropic':
+                    apiKeyKey = 'anthropicApiKey';
+                    configureCommand = 'superdesign.configureApiKey';
+                    displayName = `Anthropic (${this.getModelDisplayName(model)})`;
+                    break;
+                case 'openai-compatible':
+                    apiKeyKey = 'openaiCompatibleApiKey';
+                    configureCommand = 'superdesign.configureOpenAICompatibleApiKey';
+                    displayName = `OpenAI Compatible (${model})`;
+                    break;
+                case 'openai':
+                default:
+                    apiKeyKey = 'openaiApiKey';
+                    configureCommand = 'superdesign.configureOpenAIApiKey';
+                    displayName = `OpenAI (${this.getModelDisplayName(model)})`;
+                    break;
             }
             
             // Update both provider and specific model
@@ -180,7 +182,67 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
             vscode.window.showErrorMessage(`Failed to update AI model: ${error}`);
         }
     }
-    
+
+    private async handleConfigureCustomOpenAIModel(webview: vscode.Webview) {
+        const config = vscode.workspace.getConfiguration('superdesign');
+        const existingModel = config.get<string>('openaiCompatibleModel') || config.get<string>('aiModel');
+
+        const input = await vscode.window.showInputBox({
+            title: '配置自定义OpenAI兼容模型',
+            prompt: '请输入OpenAI兼容模型ID（例如：gpt-4o-mini 或自建模型标识）',
+            value: existingModel || '',
+            placeHolder: 'gpt-4o-mini',
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return '模型ID不能为空';
+                }
+                return null;
+            }
+        });
+
+        if (!input) {
+            vscode.window.showInformationMessage('已取消自定义模型配置');
+            return;
+        }
+
+        const trimmedModel = input.trim();
+
+        await config.update('aiModelProvider', 'openai-compatible', vscode.ConfigurationTarget.Global);
+        await config.update('aiModel', trimmedModel, vscode.ConfigurationTarget.Global);
+        await config.update('openaiCompatibleModel', trimmedModel, vscode.ConfigurationTarget.Global);
+
+        const apiKey = config.get<string>('openaiCompatibleApiKey');
+        const baseUrl = config.get<string>('openaiCompatibleBaseUrl');
+
+        if (!apiKey) {
+            const result = await vscode.window.showWarningMessage(
+                '尚未配置自定义OpenAI兼容API Key，是否立即配置？',
+                '立即配置',
+                '稍后'
+            );
+            if (result === '立即配置') {
+                await vscode.commands.executeCommand('superdesign.configureOpenAICompatibleApiKey');
+            }
+        }
+
+        if (!baseUrl) {
+            const result = await vscode.window.showWarningMessage(
+                '尚未配置自定义OpenAI兼容Base URL，是否立即配置？',
+                '立即配置',
+                '稍后'
+            );
+            if (result === '立即配置') {
+                await vscode.commands.executeCommand('superdesign.configureOpenAICompatibleBaseUrl');
+            }
+        }
+
+        webview.postMessage({
+            command: 'providerChanged',
+            provider: 'openai-compatible',
+            model: trimmedModel
+        });
+    }
+
     private getModelDisplayName(model: string): string {
         const modelNames: { [key: string]: string } = {
             // OpenAI models
@@ -337,7 +399,11 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
             'rekaai/reka-flash-3': 'Reka Flash 3',
             'openrouter/auto': 'Auto (Best Available)'
         };
-        
+
+        if (model === '__custom-openai-compatible__') {
+            return '自定义OpenAI兼容...';
+        }
+
         return modelNames[model] || model;
     }
-} 
+}

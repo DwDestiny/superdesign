@@ -5,6 +5,7 @@ interface ModelSelectorProps {
     selectedModel: string;
     onModelChange: (model: string) => void;
     disabled?: boolean;
+    vscode: any;
 }
 
 interface ModelOption {
@@ -14,7 +15,7 @@ interface ModelOption {
     category: string;
 }
 
-const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, onModelChange, disabled }) => {
+const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, onModelChange, disabled, vscode: vscodeApi }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -22,6 +23,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, onModelCha
     const modalRef = useRef<HTMLDivElement>(null);
 
     const models: ModelOption[] = [
+        { id: '__custom-openai-compatible__', name: '自定义OpenAI兼容...', provider: '自定义', category: '自定义' },
         // Anthropic
         { id: 'claude-4-opus-20250514', name: 'Claude 4 Opus', provider: 'Anthropic', category: 'Premium' },
         { id: 'claude-4-sonnet-20250514', name: 'Claude 4 Sonnet', provider: 'Anthropic', category: 'Balanced' },
@@ -135,6 +137,14 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, onModelCha
     }, [isOpen]);
 
     const handleModelSelect = (modelId: string) => {
+        if (modelId === '__custom-openai-compatible__') {
+            vscodeApi.postMessage({
+                command: 'configureCustomOpenAIModel'
+            });
+            setIsOpen(false);
+            return;
+        }
+
         onModelChange(modelId);
         setIsOpen(false);
     };

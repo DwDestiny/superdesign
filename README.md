@@ -63,6 +63,14 @@ Instructions here (Click to play):
 2. Put anything in Openai Api Key input
 3. Add your OpenAi Url on the Openai Url input (example: http://127.0.0.1:1234/v1 for LM Studio)
 
+## OpenAI 兼容接口自定义配置
+
+在 VS Code 设置中可配置以下 3 个字段以连接自建或第三方 OpenAI 兼容服务（仅需了解这三项）：
+
+- `superdesign.openaiCompatibleBaseUrl`：OpenAI 兼容接口的 Base URL（如 `http://127.0.0.1:1234/v1`）。
+- `superdesign.openaiCompatibleApiKey`：接口鉴权所需的 API Key（本地无鉴权可随意填）。
+- `superdesign.openaiCompatibleModel`：使用的模型标识（如 `gpt-4o-mini`、`llama-3.1-8b-instruct` 等）。
+
 ## 📂 Where Are My Designs Stored?
 
 Your generated designs are saved locally inside `.superdesign/`.
@@ -94,4 +102,3 @@ Pull requests are welcome. Star the repo and join us on [Discord](https://discor
 - 📦 GitHub: [https://github.com/superdesigndev/superdesign](https://github.com/superdesigndev/superdesign)
 - 💬 Discord: [Join the Community](https://discord.gg/XYZ)
 - 🐦 Twitter / X: [@SuperDesignDev](https://x.com/SuperDesignDev)
-

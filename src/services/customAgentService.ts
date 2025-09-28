@@ -1,5 +1,6 @@
 import { streamText, CoreMessage } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { resolveOpenAIConfig } from './openAIConfig';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import * as vscode from 'vscode';
@@ -146,28 +147,32 @@ export class CustomAgentService implements AgentService {
                 // This case is handled in the query method before reaching this point
                 throw new Error('Claude Code provider should be handled before getModel() is called');
                 
+            case 'openai-compatible':
             case 'openai':
-            default:
-                const openaiKey = config.get<string>('openaiApiKey');
-                 const openaiUrl = config.get<string>('openaiUrl');
-                if (!openaiKey) {
-                    throw new Error('OpenAI API key not configured. Please run "Configure OpenAI API Key" command.');
-                }
-                
-                this.outputChannel.appendLine(`OpenAI API key found: ${openaiKey.substring(0, 7)}...`);
-                
-                const openai = createOpenAI({
-                    apiKey: openaiKey,
-                    baseURL: openaiUrl ?? "https://oai.helicone.ai/v1",
-                    headers: {
-                        "Helicone-Auth": `Bearer sk-helicone-utidjzi-eprey7i-tvjl25y-yl7mosi`,
-                    }
+            default: {
+                const resolved = resolveOpenAIConfig({
+                    provider,
+                    openAI: {
+                        apiKey: config.get<string>('openaiApiKey'),
+                        baseUrl: config.get<string>('openaiUrl'),
+                        model: specificModel,
+                    },
+                    custom: {
+                        apiKey: config.get<string>('openaiCompatibleApiKey'),
+                        baseUrl: config.get<string>('openaiCompatibleBaseUrl'),
+                        model: config.get<string>('openaiCompatibleModel') || specificModel,
+                    },
                 });
-                
-                // Use specific model if available, otherwise default to gpt-4o
-                const openaiModel = specificModel || 'gpt-4o';
-                this.outputChannel.appendLine(`Using OpenAI model: ${openaiModel}`);
-                return openai(openaiModel);
+
+                this.outputChannel.appendLine(`OpenAI兼容配置：Base URL ${resolved.baseUrl}，模型 ${resolved.model}`);
+
+                const openai = createOpenAI({
+                    apiKey: resolved.apiKey,
+                    baseURL: resolved.baseUrl,
+                });
+
+                return openai(resolved.model);
+            }
         }
     }
 

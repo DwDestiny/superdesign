@@ -1445,6 +1445,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ layout, vscode }) => {
                                         selectedModel={selectedModel}
                                         onModelChange={handleModelChange}
                                         disabled={isLoading || showWelcome}
+                                        vscode={vscode}
                                     />
                                 </div>
                             </div>

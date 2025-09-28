@@ -1390,12 +1390,22 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	const configureOpenAICompatibleApiKeyDisposable = vscode.commands.registerCommand('superdesign.configureOpenAICompatibleApiKey', async () => {
+		await configureOpenAICompatibleApiKey();
+	});
+
+	const configureOpenAICompatibleBaseUrlDisposable = vscode.commands.registerCommand('superdesign.configureOpenAICompatibleBaseUrl', async () => {
+		await configureOpenAICompatibleBaseUrl();
+	});
+
 	context.subscriptions.push(
 		helloWorldDisposable, 
 		configureApiKeyDisposable,
 		configureOpenAIApiKeyDisposable,
 		configureOpenRouterApiKeyDisposable,
-    configureOpenAIUrlDisposable,
+		configureOpenAIUrlDisposable,
+		configureOpenAICompatibleApiKeyDisposable,
+		configureOpenAICompatibleBaseUrlDisposable,
 		sidebarDisposable,
 		showSidebarDisposable,
 		openCanvasDisposable,
@@ -1579,6 +1589,87 @@ async function configureOpenAIUrl() {
       vscode.window.showWarningMessage('No Url was set');
     }
   }
+}
+
+// 配置自定义OpenAI兼容API Key
+async function configureOpenAICompatibleApiKey() {
+	const currentKey = vscode.workspace.getConfiguration('superdesign').get<string>('openaiCompatibleApiKey');
+
+	const input = await vscode.window.showInputBox({
+		title: '配置自定义OpenAI兼容API Key',
+		prompt: '请输入OpenAI兼容接口的API Key（支持自建或第三方网关）',
+		value: currentKey ? '••••••••••••••••' : '',
+		password: true,
+		placeHolder: 'sk-...',
+		validateInput: (value) => {
+			if (!value || value.trim().length === 0) {
+				return 'API Key不能为空';
+			}
+			if (value === '••••••••••••••••') {
+				return null;
+			}
+			return null;
+		}
+	});
+
+	if (input !== undefined) {
+		if (input !== '••••••••••••••••') {
+			try {
+				await vscode.workspace.getConfiguration('superdesign').update(
+					'openaiCompatibleApiKey',
+					input.trim(),
+					vscode.ConfigurationTarget.Global
+				);
+				vscode.window.showInformationMessage('✅ 自定义OpenAI兼容API Key配置成功');
+			} catch (error) {
+				vscode.window.showErrorMessage(`保存API Key失败: ${error}`);
+			}
+		} else if (currentKey) {
+			vscode.window.showInformationMessage('API Key保持不变');
+		} else {
+			vscode.window.showWarningMessage('未设置API Key');
+		}
+	}
+}
+
+// 配置自定义OpenAI兼容Base URL
+async function configureOpenAICompatibleBaseUrl() {
+	const currentUrl = vscode.workspace.getConfiguration('superdesign').get<string>('openaiCompatibleBaseUrl');
+
+	const input = await vscode.window.showInputBox({
+		title: '配置自定义OpenAI兼容Base URL',
+		prompt: '请输入OpenAI兼容接口Base URL（包含版本路径，如 https://host/v1）',
+		value: currentUrl ?? '',
+		placeHolder: 'http://localhost:1234/v1',
+		validateInput: (value) => {
+			if (!value || value.trim().length === 0) {
+				return 'Base URL不能为空';
+			}
+			if (!value.startsWith('http')) {
+				return 'Base URL必须以http或https开头';
+			}
+			return null;
+		}
+	});
+
+	if (input !== undefined) {
+		if (input.trim().length > 0) {
+			try {
+				await vscode.workspace.getConfiguration('superdesign').update(
+					'openaiCompatibleBaseUrl',
+					input.trim(),
+					vscode.ConfigurationTarget.Global
+				);
+				vscode.window.showInformationMessage('✅ 自定义OpenAI兼容Base URL配置成功');
+			} catch (error) {
+				vscode.window.showErrorMessage(`保存Base URL失败: ${error}`);
+			}
+		} else if (currentUrl) {
+			vscode.window.showInformationMessage('Base URL保持不变');
+		} else {
+			vscode.window.showWarningMessage('未设置Base URL');
+		}
+	}
 }
 
 class SuperdesignCanvasPanel {
@@ -1928,4 +2019,3 @@ function getNonce() {
 export function deactivate() {
 	Logger.dispose();
 }
-

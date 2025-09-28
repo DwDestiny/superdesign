@@ -38,6 +38,8 @@
   ],
   "activationEvents": [
     "onCommand:superdesign.helloWorld",
+    "onCommand:superdesign.configureOpenAICompatibleApiKey",
+    "onCommand:superdesign.configureOpenAICompatibleBaseUrl",
     "onView:superdesign.chatView"
   ],
   "main": "./dist/extension.js",
@@ -61,6 +63,16 @@
       {
         "command": "superdesign.configureOpenAIUrl",
         "title": "Configure OpenAI url",
+        "category": "Superdesign"
+      },
+      {
+        "command": "superdesign.configureOpenAICompatibleApiKey",
+        "title": "Configure Custom OpenAI-Compatible API Key",
+        "category": "Superdesign"
+      },
+      {
+        "command": "superdesign.configureOpenAICompatibleBaseUrl",
+        "title": "Configure Custom OpenAI-Compatible Base URL",
         "category": "Superdesign"
       },
       {
@@ -195,6 +207,21 @@
           "description": "OpenAI url for custom agent",
           "scope": "application"
         },
+        "superdesign.openaiCompatibleApiKey": {
+          "type": "string",
+          "description": "API key for OpenAI-compatible endpoint (self-hosted or proxy)",
+          "scope": "application"
+        },
+        "superdesign.openaiCompatibleBaseUrl": {
+          "type": "string",
+          "description": "Base URL for OpenAI-compatible endpoint (include version path)",
+          "scope": "application"
+        },
+        "superdesign.openaiCompatibleModel": {
+          "type": "string",
+          "description": "Preferred model ID for OpenAI-compatible endpoint",
+          "scope": "application"
+        },
         "superdesign.openrouterApiKey": {
           "type": "string",
           "description": "OpenRouter API key for custom agent",
@@ -206,10 +233,11 @@
             "openai",
             "anthropic",
             "openrouter",
-            "claude-code"
+            "claude-code",
+            "openai-compatible"
           ],
           "default": "anthropic",
-          "description": "AI model provider for custom agent (OpenAI, Anthropic, OpenRouter, or Claude Code - Note: Claude Code should be used via the main LLM Provider setting instead)",
+          "description": "AI model provider for custom agent (OpenAI, Anthropic, OpenRouter, Claude Code, or custom OpenAI-compatible endpoint)",
           "scope": "application"
         },
         "superdesign.aiModel": {
