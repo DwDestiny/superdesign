@@ -39,20 +39,22 @@ export class CustomAgentService implements AgentService {
             this.outputChannel.appendLine(`Workspace root detected: ${workspaceRoot}`);
             
             if (workspaceRoot) {
-                // Create .superdesign folder in workspace root
+                // 1) 始终在工作区根目录下创建用于缓存/日志的 .superdesign 目录
                 const superdesignDir = path.join(workspaceRoot, '.superdesign');
                 this.outputChannel.appendLine(`Setting up .superdesign directory at: ${superdesignDir}`);
-                
-                // Create directory if it doesn't exist
+
                 if (!fs.existsSync(superdesignDir)) {
                     fs.mkdirSync(superdesignDir, { recursive: true });
                     this.outputChannel.appendLine(`Created .superdesign directory: ${superdesignDir}`);
                 } else {
                     this.outputChannel.appendLine(`.superdesign directory already exists: ${superdesignDir}`);
                 }
-                
-                this.workingDirectory = superdesignDir;
-                this.outputChannel.appendLine(`Working directory set to: ${this.workingDirectory}`);
+
+                // 2) 将工具的工作目录设为“工作区根目录”而不是 .superdesign
+                // 这样 write/edit/theme 等工具写入的相对路径（如 design_iterations/...）
+                // 会直接落在项目根目录，更直观、也更符合用户预期
+                this.workingDirectory = workspaceRoot;
+                this.outputChannel.appendLine(`Working directory set to workspace root: ${this.workingDirectory}`);
             } else {
                 this.outputChannel.appendLine('No workspace root found, using fallback');
                 // Fallback to OS temp directory if no workspace
