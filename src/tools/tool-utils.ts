@@ -22,6 +22,26 @@ export interface ToolSuccessResponse {
 export type ToolResponse = ToolSuccessResponse | ToolErrorResponse;
 
 /**
+ * 规范化“design_iterations”写入路径：
+ * - 若用户/Agent 传入相对路径以 design_iterations/ 开头，则重写为 .superdesign/design_iterations/
+ * - 已经为 .superdesign/design_iterations/ 的路径保持不变
+ */
+function normalizeDesignIterationsPath(filePath: string): string {
+  const raw = filePath.replace(/\\/g, '/');
+  const trimmed = raw.replace(/^\.\/+/, ''); // 移除开头的"./"
+  if (trimmed.startsWith('.superdesign/design_iterations')) {
+    return filePath; // 已是目标目录
+  }
+  if (trimmed === 'design_iterations' || trimmed.startsWith('design_iterations/')) {
+    const suffix = trimmed === 'design_iterations' ? '' : trimmed.slice('design_iterations/'.length);
+    const mapped = `.superdesign/design_iterations${suffix ? '/' + suffix : ''}`;
+    // 保持与输入同类分隔符（尽量）
+    return filePath.includes('\\') ? mapped.replace(/\//g, '\\') : mapped;
+  }
+  return filePath;
+}
+
+/**
  * Generic error handler that converts exceptions/errors to standardized error responses
  */
 export function handleToolError(
@@ -72,12 +92,15 @@ export function validateWorkspacePath(filePath: string, context: ExecutionContex
 
     const normalizedWorkspace = path.normalize(context.workingDirectory);
     
+    // 标准化 design_iterations 目标目录
+    const mappedPath = normalizeDesignIterationsPath(filePath);
+
     // Handle both absolute and relative paths
     let resolvedPath: string;
-    if (path.isAbsolute(filePath)) {
-      resolvedPath = path.normalize(filePath);
+    if (path.isAbsolute(mappedPath)) {
+      resolvedPath = path.normalize(mappedPath);
     } else {
-      resolvedPath = path.resolve(context.workingDirectory, filePath);
+      resolvedPath = path.resolve(context.workingDirectory, mappedPath);
     }
     
     // Check if path is within workspace boundary
@@ -99,10 +122,11 @@ export function validateWorkspacePath(filePath: string, context: ExecutionContex
  * Safely resolve a file path (supports both absolute and relative paths)
  */
 export function resolveWorkspacePath(filePath: string, context: ExecutionContext): string {
-  if (path.isAbsolute(filePath)) {
-    return path.normalize(filePath);
+  const mappedPath = normalizeDesignIterationsPath(filePath);
+  if (path.isAbsolute(mappedPath)) {
+    return path.normalize(mappedPath);
   } else {
-    return path.resolve(context.workingDirectory, filePath);
+    return path.resolve(context.workingDirectory, mappedPath);
   }
 }
 

@@ -1,5 +1,101 @@
 # 项目进展记录
 
+## 2025-09-30
+- 问题排查：使用自定义 OpenAI 兼容 Base URL（`superdesign.openaiCompatibleBaseUrl`）与自定义模型为 Claude 系列（例如`claude-3-5-sonnet-20241022`）时，对话会立即终止并弹出 API 配置页面（指向 Anthropic）。
+- 根因结论：代码存在按“模型名前缀”推断提供方的逻辑，当模型以`claude-`开头时会强制将 provider 设为`anthropic`，从而检查`superdesign.anthropicApiKey`是否配置，忽略了用户已配置的 OpenAI 兼容端点，导致误弹 Anthropic 配置。
+- 涉及位置：
+  - `src/services/customAgentService.ts` 中 `getModel()`：
+    - 依据`specificModel.startsWith('claude-')`将`effectiveProvider`设为`anthropic`，随后分支要求 `anthropicApiKey`；未优先考虑 `openai-compatible` 的自定义配置。
+  - `src/services/chatMessageService.ts` 的错误处理分支：
+    - 使用相同的前缀推断逻辑来决定错误提示与“配置密钥”入口，从而在自定义端点场景下误判为需要配置 Anthropic。
+- 修复建议（待确认后实施）：
+  - 当满足以下任一条件时，优先锁定为 `openai-compatible`，禁止再被模型名前缀覆盖：
+    1) `superdesign.aiModelProvider === 'openai-compatible'`
+    2) 存在任一自定义字段：`openaiCompatibleApiKey`/`openaiCompatibleBaseUrl`/`openaiCompatibleModel`
+  - 将“有效提供方”解析抽取为公共方法，例如在 `src/services/modelProviderUtils.ts` 新增：`resolveEffectiveProvider(ctx)`，入参包含 `provider`、`specificModel`、`openaiUrl`、`openaiCompatible*`，返回 `openai | anthropic | openrouter | openai-compatible`。在 `customAgentService.ts` 与 `chatMessageService.ts` 统一使用，避免重复与偏差。
+  - 兼容性保持：
+    - `model` 含 `/` 仍判为 OpenRouter。
+    - 在未配置 OpenAI 兼容端点时，`claude-*` 仍判为 Anthropic；其它为 OpenAI。
+- TDD 计划（实现前先补测试）：
+  - 用例1：设置 `aiModelProvider='openai-compatible'` 且 `model='claude-3-5-sonnet-20241022'`，应解析为 `openai-compatible`。
+  - 用例2：仅设置 `openaiCompatibleBaseUrl` 与 `openaiCompatibleApiKey`（provider 任意），`model='claude-...'` 亦应解析为 `openai-compatible`。
+  - 用例3：未配置自定义端点，`model='anthropic/claude-3-7-sonnet-20250219'` 解析为 `openrouter`。
+  - 用例4：未配置自定义端点，`model='claude-3-5-sonnet-20241022'` 解析为 `anthropic`。
+  - 用例5：未配置自定义端点，`model='gpt-4o'` 解析为 `openai`。
+
+### 已实施变更
+- 新增：`resolveEffectiveProvider(ctx)`（`src/services/modelProviderUtils.ts`）
+  - 优先级：显式 `openai-compatible` 或存在任一 `openaiCompatible*` → `openai-compatible`；
+    其次 `model` 含 `/` → `openrouter`；`model` 以 `claude-` → `anthropic`；
+    否则按 `provider` 回退，无法识别默认 `openai`。
+  - 兼容保留：当 `provider==='claude-code'` 时返回 `claude-code`，便于上层在错误提示与密钥检测中保留原有行为。
+- 改造：`customAgentService.ts`
+  - `getModel()` 使用 `resolveEffectiveProvider`；
+  - `hasApiKey()` 使用 `resolveEffectiveProvider` 并补齐 `openai-compatible` 与 `claude-code` 分支（`claude-code` 一直返回 `true`）。
+  - 删除 `getModel()` 中不可达的 `case 'claude-code'` 分支（`claude-code` 在 `query()` 开头单独处理）。
+- 改造：`chatMessageService.ts`
+  - 错误处理分支使用 `resolveEffectiveProvider` 一致解析；
+  - 新增 `openai-compatible` 的“配置密钥”入口（`superdesign.configureOpenAICompatibleApiKey`）；
+  - 保留 `claude-code` 分支用于展示“打开设置”。
+- 测试：新增 `src/test/provider-resolution.test.ts`，并将 `tsconfig.test.json` 的 `include` 扩展到 `src/services/**/*`；
+  - 覆盖上述 5 个关键场景，单测通过；
+  - 运行 `node node_modules/typescript/bin/tsc --project tsconfig.test.json && node dist-test/test/provider-resolution.test.js` 验证通过。
+
+- 全局提示词增强（语言镜像原则）：
+  - 在 `src/services/modelProviderUtils.ts` 新增 `buildGlobalCommunicationGuidelines()`，返回“语言镜像原则：永远使用与用户一致的语言沟通”。
+  - `customAgentService.getSystemPrompt()` 注入该指令，作为 `# Instructions` 部分首条规则。
+  - 单测 `src/test/language-mirroring.test.ts` 覆盖该指令文本，确保关键语句存在。
+
+### 验证
+- 通过 `esbuild` 本地打包（`node esbuild.js`）完成，`eslint` 静态检查通过。
+- 手动联调建议：在设置中选择 `AI Model Provider = openai-compatible`，并填写 `openaiCompatibleBaseUrl`、`openaiCompatibleApiKey`；`Model` 选择/填写任意 `claude-*`，应正常走 OpenAI 兼容端点，不再弹出 Anthropic 配置。
+
+### UI 修复：终止会话按钮
+- 现象：点击“终止会话”无反应。
+- 根因：前端按钮仅 `console.log('Stop requested')`，未向扩展发送消息。
+- 修复：`src/webview/components/Chat/ChatInterface.tsx` 的 Stop 按钮 `onClick` 改为 `vscode.postMessage({ command: 'stopChat' })`。
+- 扩展侧：`ChatSidebarProvider` 已处理 `stopChat` → 调用 `ChatMessageService.stopCurrentChat()`，该方法会 `AbortController.abort()` 并向 Webview 回发 `chatStopped`，`useChat` 在收到后 `setIsLoading(false)`。
+
+### 写入目录约定修复：design_iterations → .superdesign/design_iterations
+- 现象：生成的 HTML 落在项目根目录 `design_iterations/`，而非期望的 `.superdesign/design_iterations/`。
+- 修复策略：在工具层对路径做规范化映射，不改动业务调用与提示词。
+- 改动：
+  - `src/tools/tool-utils.ts` 新增 `normalizeDesignIterationsPath()`，将相对路径 `design_iterations/*` 自动重写为 `.superdesign/design_iterations/*`；
+  - 在 `validateWorkspacePath()` 与 `resolveWorkspacePath()` 中应用该映射；
+  - 新增单测 `src/test/tool-path-mapping.test.ts` 验证映射与校验通过。
+- 兼容性：
+  - 已经传入 `.superdesign/design_iterations/*` 的路径不受影响；
+  - 其它目录写入不受影响。
+
+### 消息净化修复：避免“messages: text content blocks must be non-empty”
+- 现象：重试/继续时偶发 Anthropic 报错，提示文本块不能为空。
+- 根因：历史对话中存在仅包含 tool-call 的 assistant 消息，或 text 片段为空，违反 Anthropic 对消息结构的要求。
+- 修复：
+  - `src/services/chatMessageService.ts` 新增 `sanitizeChatHistory()`，在向模型发送前统一净化历史：
+    - 为 assistant 消息：
+      - 过滤空字符串 text 片段；
+      - 若数组首个不是非空 text，则将首个非空 text 提前；若不存在则在最前插入最小占位 `.`；
+      - 字符串 content 为空时改为 `.`；
+    - 为 user 消息：丢弃空字符串文本；数组文本片段过滤空 text；
+  - 在 `handleChatMessage()` 中使用净化后的 `sanitizedHistory` 调用模型。
+- 验证：构建与 Lint 通过；实际使用中不应再出现该报错。
+
+### Canvas 刷新按钮行为修复
+- 现象：看板上的“刷新”图标点击后无反应，需要关闭重开才能看到新文件。
+- 根因：该按钮原绑定为“重置帧位置”，并未触发文件重新扫描；用户期望是“重新加载设计文件”。
+- 修复：
+  - `src/webview/components/CanvasView.tsx`
+    - 新增 `handleReloadDesignFiles()`，向扩展发送 `{command:'loadDesignFiles'}` 并置 `isLoading=true`；
+    - 将现有刷新图标绑定到重新加载；
+    - 新增一个“重置帧位置”按钮（使用 SettingsIcon），保留原功能；
+  - 扩展侧已有 `loadDesignFiles` 处理与文件系统 watcher，无需改动。
+- 结果：点击刷新可立刻重新加载 `.superdesign/design_iterations` 下的 HTML/SVG/CSS。
+
+### 风险与回退
+- 本次更改不改变未配置自定义端点时的默认行为；
+- 若遇到兼容问题，可将 `aiModelProvider` 临时切换为 `anthropic` 或 `openrouter` 进行对比验证；
+- 如需禁用统一解析，可临时在代码中回退到旧逻辑（不建议）。
+
 ## 2025-09-29
 - 修复：LLM 工具写入路径与用户预期不一致，导致“看起来没写入文件”。
 - 变更点：将自定义智能体工具的`workingDirectory`从`.superdesign`改为“工作区根目录”，仍保留`.superdesign`用于缓存与日志；因此诸如 `design_iterations/theme_*.css` 会直接写入项目根目录。

@@ -1,0 +1,96 @@
+/* Vibetool Manager - 深色玻璃拟态主题 */
+
+:root {
+  /* 基础色彩 深色模式 */
+  --background: oklch(0.1200 0.0050 240);
+  --foreground: oklch(0.9500 0.0100 240);
+  
+  /* 卡片与浮层 */
+  --card: oklch(0.1600 0.0080 240);
+  --card-foreground: oklch(0.9500 0.0100 240);
+  --popover: oklch(0.1400 0.0060 240);
+  --popover-foreground: oklch(0.9500 0.0100 240);
+  
+  /* 主色 浅蓝绿科技感 */
+  --primary: oklch(0.7500 0.1200 195);
+  --primary-foreground: oklch(0.1200 0.0050 240);
+  
+  /* 次要色 */
+  --secondary: oklch(0.7200 0.1300 170);
+  --secondary-foreground: oklch(0.1200 0.0050 240);
+  
+  /* 柔和色 */
+  --muted: oklch(0.2200 0.0100 240);
+  --muted-foreground: oklch(0.6000 0.0150 240);
+  
+  /* 强调色 */
+  --accent: oklch(0.7800 0.1600 180);
+  --accent-foreground: oklch(0.1200 0.0050 240);
+  
+  /* 状态色 */
+  --destructive: oklch(0.6000 0.2200 25);
+  --destructive-foreground: oklch(0.9800 0.0050 25);
+  
+  /* 边框与输入 */
+  --border: oklch(0.2800 0.0200 240);
+  --input: oklch(0.1800 0.0100 240);
+  --ring: oklch(0.7500 0.1200 195);
+  
+  /* 图表色 */
+  --chart-1: oklch(0.7500 0.1200 195);
+  --chart-2: oklch(0.7200 0.1300 170);
+  --chart-3: oklch(0.6800 0.1500 210);
+  --chart-4: oklch(0.7800 0.1600 180);
+  --chart-5: oklch(0.6500 0.1100 155);
+  
+  /* 侧边栏 */
+  --sidebar: oklch(0.1400 0.0060 240);
+  --sidebar-foreground: oklch(0.9000 0.0100 240);
+  --sidebar-primary: oklch(0.7500 0.1200 195);
+  --sidebar-primary-foreground: oklch(0.1200 0.0050 240);
+  --sidebar-accent: oklch(0.2200 0.0150 195);
+  --sidebar-accent-foreground: oklch(0.9000 0.0100 240);
+  --sidebar-border: oklch(0.2600 0.0200 240);
+  --sidebar-ring: oklch(0.7500 0.1200 195);
+  
+  /* 字体系统 */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, Times New Roman, Times, serif;
+  --font-mono: JetBrains Mono, SF Mono, Consolas, monospace;
+  
+  /* 圆角系统 */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  
+  /* 阴影系统 玻璃拟态 */
+  --shadow-2xs: 0 1px 2px 0 hsl(0 0% 0% / 0.20);
+  --shadow-xs: 0 2px 4px 0 hsl(0 0% 0% / 0.25);
+  --shadow-sm: 0 4px 8px 0 hsl(0 0% 0% / 0.30);
+  --shadow: 0 8px 16px 0 hsl(0 0% 0% / 0.35);
+  --shadow-md: 0 12px 24px 0 hsl(0 0% 0% / 0.40);
+  --shadow-lg: 0 16px 32px 0 hsl(0 0% 0% / 0.45);
+  --shadow-xl: 0 24px 48px 0 hsl(0 0% 0% / 0.50);
+  --shadow-2xl: 0 32px 64px 0 hsl(0 0% 0% / 0.60);
+  
+  /* 间距系统 */
+  --spacing: 0.25rem;
+  
+  /* 字间距 */
+  --tracking-normal: -0.01em;
+}
+
+body {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+  font-family: var(--font-sans) !important;
+  letter-spacing: var(--tracking-normal) !important;
+  line-height: 1.6 !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600 !important;
+  color: var(--foreground) !important;
+}

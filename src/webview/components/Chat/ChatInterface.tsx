@@ -1484,8 +1484,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ layout, vscode }) => {
                                 {isLoading ? (
                                     <button 
                                         onClick={() => {
-                                            // Stop functionality can be added later
-                                            console.log('Stop requested');
+                                            // 终止会话：通知扩展侧中止当前请求
+                                            try {
+                                                vscode.postMessage({ command: 'stopChat' });
+                                            } catch (e) {
+                                                console.error('Failed to post stopChat message:', e);
+                                            }
                                         }}
                                         className="send-btn stop-btn"
                                         title="Stop response"

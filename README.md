@@ -63,13 +63,45 @@ Instructions here (Click to play):
 2. Put anything in Openai Api Key input
 3. Add your OpenAi Url on the Openai Url input (example: http://127.0.0.1:1234/v1 for LM Studio)
 
-## OpenAI 兼容接口自定义配置
+## OpenAI 兼容接口自定义配置（推荐）
 
 在 VS Code 设置中可配置以下 3 个字段以连接自建或第三方 OpenAI 兼容服务（仅需了解这三项）：
 
 - `superdesign.openaiCompatibleBaseUrl`：OpenAI 兼容接口的 Base URL（如 `http://127.0.0.1:1234/v1`）。
 - `superdesign.openaiCompatibleApiKey`：接口鉴权所需的 API Key（本地无鉴权可随意填）。
-- `superdesign.openaiCompatibleModel`：使用的模型标识（如 `gpt-4o-mini`、`llama-3.1-8b-instruct` 等）。
+- `superdesign.openaiCompatibleModel`：使用的模型标识（如 `gpt-4o-mini`、`llama-3.1-8b-instruct`、`claude-3-5-sonnet-20241022` 等）。
+
+注意：
+- 当选择 Provider 为 `openai-compatible` 或任一 `openaiCompatible*` 字段已填写时，系统会优先走自定义端点，即使模型名是 `claude-*` 也不会要求配置 Anthropic Key。
+- 如果模型名形如 `vendor/model`（如 `anthropic/claude-3-7-sonnet-20250219`），将自动按 OpenRouter 处理。
+
+## 设计文件的生成路径
+
+- 工具生成的文件统一落到 `.superdesign/design_iterations/` 目录。
+- 若你在对话中让 Agent 写入 `design_iterations/xxx.html`，系统会自动映射到 `.superdesign/design_iterations/xxx.html`，无需更改你的习惯。
+
+## 终止会话 & 刷新看板
+
+- 终止：对话区的 Stop 按钮会中止当前流式响应并恢复输入框。
+- 刷新：看板工具栏的刷新按钮会重新扫描 `.superdesign/design_iterations/` 下的 HTML/SVG/CSS 并即时更新，无需关闭重开。
+
+## 打包安装 VSIX（本地测试）
+
+1. 安装依赖：`npm install`
+2. 运行构建：`node esbuild.js --production`
+3. 打包：`npx @vscode/vsce package`
+4. VS Code 中选择“从 VSIX 安装…”，或命令行 `code --install-extension ./superdesign-<version>.vsix`
+
+## 故障排查
+
+- 报错 `messages: text content blocks must be non-empty`
+  - 我们已在发送前对历史消息做净化（删除空 text、确保 assistant 首块为非空 text）；如仍遇到，请在“输出”面板选择 Superdesign，将调试日志反馈给我们。
+- 模型选择 `claude-*` 时误弹 Anthropic 配置
+  - 请使用 OpenAI 兼容端点，并确保设置了 `openaiCompatibleBaseUrl`/`openaiCompatibleApiKey`；我们已修复按模型名前缀误判 Provider 的问题。
+
+## 语言镜像原则
+
+Superdesign 遵循“语言镜像原则”：始终使用与用户一致的语言进行沟通。
 
 ## 📂 Where Are My Designs Stored?
 

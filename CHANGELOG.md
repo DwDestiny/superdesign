@@ -2,6 +2,18 @@
 
 All notable changes to the "superdesign" extension will be documented in this file.
 
+## [0.0.15] - 2025-09-30
+
+### Fixed
+- Provider 解析：自定义 OpenAI 兼容端点 + `claude-*` 模型不再被误判为 Anthropic。
+- 停止响应：对话 Stop 按钮现在会中止流并恢复输入。
+- 写入路径：`design_iterations/*` 自动映射到 `.superdesign/design_iterations/*`。
+- 消息格式：修复 Anthropic `messages: text content blocks must be non-empty`，发送前统一净化消息。
+- 看板刷新：刷新按钮现在触发重新加载文件；“重置帧位置”保留为齿轮按钮。
+
+### Docs
+- README 增补 OpenAI 兼容配置、VSIX 打包安装、刷新与终止说明；`claude.md` 同步记录。
+
 
 ## [0.0.8] - 2025-07-01
 

@@ -3,6 +3,7 @@ import { ClaudeCodeService, LLMMessage } from './claudeCodeService';
 import { AgentService } from '../types/agent';
 import { CoreMessage } from 'ai';
 import { Logger } from './logger';
+import { resolveEffectiveProvider } from './modelProviderUtils';
 
 export class ChatMessageService {
     private currentRequestController?: AbortController;
@@ -72,9 +73,11 @@ export class ChatMessageService {
             if (chatHistory.length > 0) {
                 // Use conversation history - CoreMessage format is already compatible
                 this.outputChannel.appendLine(`Using conversation history with ${chatHistory.length} messages`);
+                // Sanitize history to satisfy provider constraints (e.g., Anthropic requires non-empty leading text for assistant)
+                const sanitizedHistory = this.sanitizeChatHistory(chatHistory);
                 response = await this.agentService.query(
                     undefined, // no prompt 
-                    chatHistory, // use CoreMessage array directly
+                    sanitizedHistory, // sanitized CoreMessage array
                     undefined, 
                     this.currentRequestController,
                     (streamMessage: any) => {
@@ -133,20 +136,18 @@ export class ChatMessageService {
                 const provider = config.get<string>('aiModelProvider', 'anthropic');
                 const openaiUrl = config.get<string>('openaiUrl');
                 
-                // Determine provider from model name if specific model is set, ignore if custom openai url is used
-                let effectiveProvider = provider;
+                // 统一解析有效提供方（优先考虑 openai-compatible 自定义配置）
+                const effectiveProvider = resolveEffectiveProvider({
+                    provider,
+                    specificModel,
+                    openaiUrl,
+                    openaiCompatibleApiKey: config.get<string>('openaiCompatibleApiKey'),
+                    openaiCompatibleBaseUrl: config.get<string>('openaiCompatibleBaseUrl'),
+                    openaiCompatibleModel: config.get<string>('openaiCompatibleModel')
+                });
+
                 let providerName = 'AI';
                 let configureCommand = 'superdesign.configureApiKey';
-                
-                if (specificModel && !(!openaiUrl && provider === 'openai')) {
-                    if (specificModel.includes('/')) {
-                        effectiveProvider = 'openrouter';
-                    } else if (specificModel.startsWith('claude-')) {
-                        effectiveProvider = 'anthropic';
-                    } else {
-                        effectiveProvider = 'openai';
-                    }
-                }
                 
                 switch (effectiveProvider) {
                     case 'openrouter':
@@ -160,6 +161,10 @@ export class ChatMessageService {
                     case 'claude-code':
                         providerName = 'Claude Code';
                         configureCommand = 'workbench.action.openSettings';
+                        break;
+                    case 'openai-compatible':
+                        providerName = 'OpenAI-Compatible';
+                        configureCommand = 'superdesign.configureOpenAICompatibleApiKey';
                         break;
                     case 'openai':
                         providerName = 'OpenAI';
@@ -192,6 +197,65 @@ export class ChatMessageService {
             // Clear the controller when done
             this.currentRequestController = undefined;
         }
+    }
+
+    // Ensure assistant messages start with non-empty text; drop empty text parts
+    private sanitizeChatHistory(history: CoreMessage[]): CoreMessage[] {
+        const sanitized: CoreMessage[] = [];
+        for (const msg of history) {
+            if (msg.role === 'assistant') {
+                if (typeof msg.content === 'string') {
+                    const text = (msg.content ?? '').toString();
+                    if (text.trim().length === 0) {
+                        sanitized.push({ ...msg, content: '.' });
+                    } else {
+                        sanitized.push(msg);
+                    }
+                } else if (Array.isArray(msg.content)) {
+                    const parts = msg.content as any[];
+                    // Filter out empty text parts
+                    const filtered = parts.filter(p => {
+                        if (p?.type === 'text') {
+                            return typeof p.text === 'string' && p.text.trim().length > 0;
+                        }
+                        return true; // keep other parts
+                    });
+
+                    // Find first non-empty text part
+                    let firstTextIndex = filtered.findIndex(p => p?.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0);
+
+                    let arranged: any[] = filtered;
+                    if (firstTextIndex === -1) {
+                        // Prepend minimal non-empty text block to satisfy provider
+                        arranged = [{ type: 'text', text: '.' }, ...filtered];
+                    } else if (firstTextIndex !== 0) {
+                        const textPart = filtered[firstTextIndex];
+                        arranged = [textPart, ...filtered.slice(0, firstTextIndex), ...filtered.slice(firstTextIndex + 1)];
+                    }
+
+                    sanitized.push({ ...msg, content: arranged });
+                } else {
+                    sanitized.push(msg);
+                }
+            } else if (msg.role === 'user') {
+                // Ensure user text is non-empty; otherwise skip
+                if (typeof msg.content === 'string') {
+                    if (msg.content.trim().length > 0) {
+                        sanitized.push(msg);
+                    }
+                } else if (Array.isArray(msg.content)) {
+                    // Keep user arrays but drop empty text parts
+                    const filtered = (msg.content as any[]).filter(p => p?.type !== 'text' || (typeof p.text === 'string' && p.text.trim().length > 0));
+                    sanitized.push({ ...msg, content: filtered });
+                } else {
+                    sanitized.push(msg);
+                }
+            } else {
+                // tool/system/etc: pass-through
+                sanitized.push(msg);
+            }
+        }
+        return sanitized;
     }
 
     private handleStreamMessage(message: CoreMessage, webview: vscode.Webview): void {

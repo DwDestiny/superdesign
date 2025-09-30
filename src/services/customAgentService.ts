@@ -18,6 +18,8 @@ import { createGrepTool } from '../tools/grep-tool';
 import { createThemeTool } from '../tools/theme-tool';
 import { createLsTool } from '../tools/ls-tool';
 import { createMultieditTool } from '../tools/multiedit-tool';
+import { buildGlobalCommunicationGuidelines } from './modelProviderUtils';
+import { resolveEffectiveProvider } from './modelProviderUtils';
 
 export class CustomAgentService implements AgentService {
     private workingDirectory: string = '';
@@ -94,17 +96,15 @@ export class CustomAgentService implements AgentService {
             this.outputChannel.appendLine(`Using specific AI model: ${specificModel}`);
         }
         
-        // Determine provider from model name if specific model is set, ignore if custom openai url is used
-        let effectiveProvider = provider;
-        if (specificModel && !(!openaiUrl && provider === 'openai')) {
-            if (specificModel.includes('/')) {
-                effectiveProvider = 'openrouter';
-            } else if (specificModel.startsWith('claude-')) {
-                effectiveProvider = 'anthropic';
-            } else {
-                effectiveProvider = 'openai';
-            }
-        }
+        // 统一解析有效提供方（优先考虑 openai-compatible 自定义配置）
+        const effectiveProvider = resolveEffectiveProvider({
+            provider,
+            specificModel,
+            openaiUrl,
+            openaiCompatibleApiKey: config.get<string>('openaiCompatibleApiKey'),
+            openaiCompatibleBaseUrl: config.get<string>('openaiCompatibleBaseUrl'),
+            openaiCompatibleModel: config.get<string>('openaiCompatibleModel')
+        });
         
         switch (effectiveProvider) {
             case 'openrouter':
@@ -144,10 +144,6 @@ export class CustomAgentService implements AgentService {
                 const anthropicModel = specificModel || 'claude-3-5-sonnet-20241022';
                 this.outputChannel.appendLine(`Using Anthropic model: ${anthropicModel}`);
                 return anthropic(anthropicModel);
-                
-            case 'claude-code':
-                // This case is handled in the query method before reaching this point
-                throw new Error('Claude Code provider should be handled before getModel() is called');
                 
             case 'openai-compatible':
             case 'openai':
@@ -206,6 +202,7 @@ export class CustomAgentService implements AgentService {
             }
         }
         
+        const communicationGuidelines = buildGlobalCommunicationGuidelines();
         return `# Role
 You are superdesign, a senior frontend designer integrated into VS Code as part of the Super Design extension.
 Your goal is to help user generate amazing design using code
@@ -216,6 +213,7 @@ Your goal is to help user generate amazing design using code
 - Working directory: ${this.workingDirectory}
 
 # Instructions
+${communicationGuidelines}
 - Use the available tools when needed to help with file operations and code analysis
 - When creating design file:
   - Build one single html page of just one screen to build a design based on users' feedback/task
@@ -677,6 +675,51 @@ I've created the html design, please reveiw and let me know if you need any chan
                 generateTheme: createThemeTool(executionContext)
             };
 
+            // Sanitize messages to satisfy provider constraints (e.g., Anthropic requires non-empty text blocks)
+            const sanitizeMessagesForProvider = (msgs: CoreMessage[]): CoreMessage[] => {
+                const out: CoreMessage[] = [];
+                for (const m of msgs) {
+                    if (m.role === 'assistant') {
+                        if (typeof m.content === 'string') {
+                            const t = (m.content ?? '').toString();
+                            out.push({ ...m, content: t.trim().length > 0 ? t : '.' });
+                        } else if (Array.isArray(m.content)) {
+                            const parts = (m.content as any[]).filter(p => {
+                                if (p?.type === 'text') {
+                                    return typeof p.text === 'string' && p.text.trim().length > 0;
+                                }
+                                return true;
+                            });
+                            let firstText = parts.findIndex(p => p?.type === 'text');
+                            let arranged = parts;
+                            if (firstText === -1) {
+                                arranged = [{ type: 'text', text: '.' }, ...parts];
+                            } else if (firstText !== 0) {
+                                const tp = parts[firstText];
+                                arranged = [tp, ...parts.slice(0, firstText), ...parts.slice(firstText + 1)];
+                            }
+                            out.push({ ...m, content: arranged as any });
+                        } else {
+                            out.push(m);
+                        }
+                    } else if (m.role === 'user') {
+                        if (typeof m.content === 'string') {
+                            if (m.content.trim().length > 0) {
+                                out.push(m);
+                            }
+                        } else if (Array.isArray(m.content)) {
+                            const filtered = (m.content as any[]).filter(p => p?.type !== 'text' || (typeof p.text === 'string' && p.text.trim().length > 0));
+                            out.push({ ...m, content: filtered });
+                        } else {
+                            out.push(m);
+                        }
+                    } else {
+                        out.push(m);
+                    }
+                }
+                return out;
+            };
+
             // Prepare AI SDK input based on available data
             const streamTextConfig: any = {
                 model: this.getModel(),
@@ -689,12 +732,12 @@ I've created the html design, please reveiw and let me know if you need any chan
             
             if (usingConversationHistory) {
                 // Use conversation messages
-                streamTextConfig.messages = conversationHistory;
+                streamTextConfig.messages = sanitizeMessagesForProvider(conversationHistory);
                 this.outputChannel.appendLine(`Using conversation history with ${conversationHistory!.length} messages`);
                 
                 // Debug: Log the actual messages being sent to AI SDK
                 this.outputChannel.appendLine('=== AI SDK MESSAGES DEBUG ===');
-                conversationHistory!.forEach((msg, index) => {
+                (streamTextConfig.messages as CoreMessage[]).forEach((msg: any, index: number) => {
                     const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
                     this.outputChannel.appendLine(`  [${index}] ${msg.role}: "${content.substring(0, 150)}..."`);
                 });
@@ -953,17 +996,14 @@ I've created the html design, please reveiw and let me know if you need any chan
         const provider = config.get<string>('aiModelProvider', 'anthropic');
         const openaiUrl = config.get<string>('openaiUrl');
         
-        // Determine provider from model name if specific model is set, ignore if custom openai url is used
-        let effectiveProvider = provider;
-        if (specificModel && !(!openaiUrl && provider === 'openai')) {
-            if (specificModel.includes('/')) {
-                effectiveProvider = 'openrouter';
-            } else if (specificModel.startsWith('claude-')) {
-                effectiveProvider = 'anthropic';
-            } else {
-                effectiveProvider = 'openai';
-            }
-        }
+        const effectiveProvider = resolveEffectiveProvider({
+            provider,
+            specificModel,
+            openaiUrl,
+            openaiCompatibleApiKey: config.get<string>('openaiCompatibleApiKey'),
+            openaiCompatibleBaseUrl: config.get<string>('openaiCompatibleBaseUrl'),
+            openaiCompatibleModel: config.get<string>('openaiCompatibleModel')
+        });
         
         switch (effectiveProvider) {
             case 'openrouter':
@@ -972,6 +1012,8 @@ I've created the html design, please reveiw and let me know if you need any chan
                 return !!config.get<string>('anthropicApiKey');
             case 'claude-code':
                 return true; // Claude Code doesn't require an API key
+            case 'openai-compatible':
+                return !!config.get<string>('openaiCompatibleApiKey');
             case 'openai':
             default:
                 return !!config.get<string>('openaiApiKey');

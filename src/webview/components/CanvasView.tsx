@@ -29,7 +29,8 @@ import {
     TabletIcon,
     DesktopIcon,
     TreeIcon,
-    LinkIcon
+    LinkIcon,
+    SettingsIcon
 } from './Icons';
 
 interface CanvasViewProps {
@@ -605,6 +606,16 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
         );
     }
 
+    const handleReloadDesignFiles = () => {
+        try {
+            setIsLoading(true);
+            const loadMessage: WebviewMessage = { command: 'loadDesignFiles' };
+            vscode.postMessage(loadMessage);
+        } catch (e) {
+            console.error('Failed to request design files reload:', e);
+        }
+    };
+
     return (
         <div className="canvas-container">
             {/* Canvas Controls - Clean Minimal Design */}
@@ -625,8 +636,11 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
                         <button className="toolbar-btn" onClick={handleResetZoom} title="Reset Zoom (Cmd/Ctrl + 0)">
                             <HomeIcon />
                         </button>
-                        <button className="toolbar-btn" onClick={handleResetPositions} title="Reset Frame Positions">
+                        <button className="toolbar-btn" onClick={handleReloadDesignFiles} title="Reload Design Files">
                             <RefreshIcon />
+                        </button>
+                        <button className="toolbar-btn" onClick={handleResetPositions} title="Reset Frame Positions">
+                            <SettingsIcon />
                         </button>
                     </div>
                 </div>
