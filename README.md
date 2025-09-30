@@ -103,6 +103,25 @@ Instructions here (Click to play):
 
 Superdesign 遵循“语言镜像原则”：始终使用与用户一致的语言进行沟通。
 
+---
+
+## 版本变更（Release Notes）
+
+### 0.0.12（2025-09-30）
+- Provider 解析优化：
+  - 当 Provider 选择 `openai-compatible` 或任一 `openaiCompatible*` 字段已填写时，优先走自定义端点；即使模型名为 `claude-*` 也不会要求配置 Anthropic Key。
+  - `vendor/model` 形式（如 `anthropic/claude-3-7-sonnet-20250219`）自动按 OpenRouter 处理。
+- 对话停止：输入框旁的 Stop 按钮可以中止当前流式响应并恢复输入。
+- 写入路径规范：将 `design_iterations/*` 自动映射到 `.superdesign/design_iterations/*`，无需更改提示词习惯。
+- 消息净化：在发送到模型前过滤空文本分片，并确保 assistant 的首块为非空 text，修复 `messages: text content blocks must be non-empty` 报错。
+- 看板刷新：刷新按钮改为“重新加载设计文件”，无需关闭重开即可看到更新；原“重置帧位置”单独保留为齿轮按钮。
+- 画板卡在 Loading 的修复：
+  - 以文件修改时间参与组件 key，强制重新挂载，避免复用旧状态导致永远 Loading；
+  - iframe 改为 `loading="eager"` 并增加 3 秒兜底定时器，确保 onLoad 未触发时也能退出 Loading；
+  - 刷新按钮触发扩展侧 `loadDesignFiles` 即时重扫目录。
+- 全局提示词增强：加入“语言镜像原则”。
+- 单元测试：新增 provider 解析、语言镜像、路径映射等测试用例。
+
 ## 📂 Where Are My Designs Stored?
 
 Your generated designs are saved locally inside `.superdesign/`.

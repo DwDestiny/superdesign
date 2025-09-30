@@ -2,7 +2,7 @@
 
 All notable changes to the "superdesign" extension will be documented in this file.
 
-## [0.0.15] - 2025-09-30
+## [0.0.12] - 2025-09-30
 
 ### Fixed
 - Provider 解析：自定义 OpenAI 兼容端点 + `claude-*` 模型不再被误判为 Anthropic。

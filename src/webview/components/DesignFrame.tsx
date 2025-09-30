@@ -100,6 +100,19 @@ const DesignFrame: React.FC<DesignFrameProps> = ({
         }
     };
 
+    // 当文件内容或视口发生变化时，重置加载状态，并添加超时兜底
+    React.useEffect(() => {
+        if (renderMode === 'iframe') {
+            setIsLoading(true);
+            setHasError(false);
+            const timer = setTimeout(() => {
+                // 兜底：若 onLoad 未触发，3 秒后强制取消加载遮罩，避免卡死
+                setIsLoading(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [file.name, file.content, viewport, viewportDimensions, renderMode]);
+
     const handleCopyPrompt = async (e: React.MouseEvent, platform?: string) => {
         e.preventDefault();
         e.stopPropagation();
@@ -319,7 +332,7 @@ const DesignFrame: React.FC<DesignFrameProps> = ({
                                 pointerEvents: (isSelected && !dragPreventOverlay && !isDragging) ? 'auto' : 'none'
                             }}
                             referrerPolicy="no-referrer"
-                            loading="lazy"
+                            loading="eager"
                             onLoad={() => {
                                 setIsLoading(false);
                                 setHasError(false);
@@ -493,7 +506,7 @@ const DesignFrame: React.FC<DesignFrameProps> = ({
                             pointerEvents: (isSelected && !dragPreventOverlay && !isDragging) ? 'auto' : 'none'
                         }}
                         referrerPolicy="no-referrer"
-                        loading="lazy"
+                        loading="eager"
                         onLoad={() => {
                             setIsLoading(false);
                             setHasError(false);

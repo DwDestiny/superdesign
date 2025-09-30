@@ -846,7 +846,7 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
                             
                             return (
                                 <DesignFrame
-                                    key={file.name}
+                                    key={`${file.name}_${(file.modified as any && (file.modified as any).getTime ? (file.modified as any).getTime() : Date.now())}`}
                                     file={file}
                                     position={finalPosition}
                                     dimensions={{ width: actualWidth, height: actualHeight }}
