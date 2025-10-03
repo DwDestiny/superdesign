@@ -1719,6 +1719,29 @@ class SuperdesignCanvasPanel {
 		this._panel.webview.onDidReceiveMessage(
 			message => {
 				switch (message.command) {
+					case 'reloadCanvas':
+						try {
+							Logger.info('Canvas reload requested from webview. Scheduling panel dispose and recreate...');
+							const extUri = this._extensionUri;
+							const sidebar = this._sidebarProvider;
+							const panelRef = this._panel; // keep reference to avoid using disposed this._panel
+
+							// Avoid re-entrancy: dispose in next tick, recreate after dispose event clears currentPanel
+							setTimeout(() => {
+								try {
+									panelRef.dispose();
+								} catch (e) {
+									Logger.warn(`Panel dispose threw (safe to ignore if already disposed): ${e}`);
+								}
+								// Wait a microtask to ensure onDidDispose has run and currentPanel is cleared
+								setTimeout(() => {
+									SuperdesignCanvasPanel.createOrShow(extUri, sidebar);
+								}, 0);
+							}, 0);
+						} catch (err) {
+							Logger.error(`Failed to schedule canvas panel reload: ${err}`);
+						}
+						break;
 					case 'loadDesignFiles':
 						this._loadDesignFiles();
 						break;

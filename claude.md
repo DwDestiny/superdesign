@@ -1,6 +1,20 @@
 # 项目进展记录
 
 ## 2025-09-30
+### 刷新=重开一致化修复（Canvas白屏问题）
+- 现象：修改设计文件后点击刷新，画板偶发展示空白，需要手动关闭再打开才能恢复。
+- 根因推测：仅在 Webview 内部重新加载数据无法复位 Webview 自身运行时与内部状态，导致极端情况下渲染树或 iframe 内容未正确重建。
+- 修复策略：新增“硬刷新”命令，使刷新按钮触发扩展侧销毁并重建画板面板，效果等同手动关闭再打开。
+- 改动：
+  - 扩展侧 `src/extension.ts`
+    - 在 `SuperdesignCanvasPanel` 的消息分支中新增 `reloadCanvas` 处理：先 `dispose()` 当前面板，再 `createOrShow()` 重新创建。
+  - Webview 侧 `src/webview/components/CanvasView.tsx`
+    - 刷新按钮改为发送 `{ command: 'reloadCanvas' }`；若重载失败回退到原有 `{ command: 'loadDesignFiles' }` 软刷新。
+  - 类型声明 `src/webview/types/canvas.types.ts`
+    - 新增 `ReloadCanvasMessage` 并纳入 `WebviewMessage` 联合类型。
+- 验证：`npm run compile` 通过；白屏问题应因完全重建而消除。
+- 影响范围：默认刷新路径最小化；保留文件系统 watcher 的软刷新逻辑，手动“刷新”按钮走硬刷新路径，行为与用户心智对齐。
+
 - 问题排查：使用自定义 OpenAI 兼容 Base URL（`superdesign.openaiCompatibleBaseUrl`）与自定义模型为 Claude 系列（例如`claude-3-5-sonnet-20241022`）时，对话会立即终止并弹出 API 配置页面（指向 Anthropic）。
 - 根因结论：代码存在按“模型名前缀”推断提供方的逻辑，当模型以`claude-`开头时会强制将 provider 设为`anthropic`，从而检查`superdesign.anthropicApiKey`是否配置，忽略了用户已配置的 OpenAI 兼容端点，导致误弹 Anthropic 配置。
 - 涉及位置：
@@ -117,3 +131,8 @@
 - 完成自定义OpenAI兼容能力：新增配置解析测试、服务层接入、前端模型选择与命令入口。
 - 更新`package.json`注册`openaiCompatible*`配置项与命令，`AGENTS.md`同步使用说明。
 - 调整`ModelSelector`组件传入`vscode`实例，修复打包时报`Cannot find name 'vscode'`的编译错误。
+- 第一步落地（统一方案-基础版）：
+  - 新增 `src/services/messageSanitizer.ts` 作为统一入口净化工具，确保 assistant 首块为非空 text、过滤空文本分片、丢弃空的 user 文本；
+  - `ChatMessageService` 与 `CustomAgentService` 均改为调用该函数，移除各自的重复实现；
+  - 在系统提示中加入“调用工具前/继续生成前先输出非空文本”的规则，直接约束模型输出结构。
+  - 单测：`src/test/message-sanitizer.test.ts` 覆盖 4 个场景，已通过。

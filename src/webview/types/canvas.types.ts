@@ -34,6 +34,10 @@ export interface LoadDesignFilesMessage extends ExtensionMessage {
     command: 'loadDesignFiles';
 }
 
+export interface ReloadCanvasMessage extends ExtensionMessage {
+    command: 'reloadCanvas';
+}
+
 export interface DesignFilesLoadedMessage extends ExtensionMessage {
     command: 'designFilesLoaded';
     data: {
@@ -80,6 +84,7 @@ export interface FileWatchMessage extends ExtensionMessage {
 
 export type WebviewMessage = 
     | LoadDesignFilesMessage 
+    | ReloadCanvasMessage
     | SelectFrameMessage
     | SetContextFromCanvasMessage
     | SetChatPromptMessage;

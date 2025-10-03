@@ -89,6 +89,7 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
     const [hierarchyTree, setHierarchyTree] = useState<HierarchyTree | null>(null);
     const [showConnections, setShowConnections] = useState(true);
     const transformRef = useRef<ReactZoomPanPinchRef>(null);
+    const reloadTimerRef = useRef<any>(null);
 
     console.log('✅ CanvasView state initialized successfully');
     
@@ -256,10 +257,17 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
                     break;
 
                 case 'fileChanged':
-                    // Handle file system changes (will implement in Task 2.3)
-                    console.log('File changed:', message.data);
-                    // Re-request files when changes occur
-                    vscode.postMessage({ command: 'loadDesignFiles' });
+                    // 某些写入在极短时间内发生多次，或存在写入未完成的瞬间读取，导致白屏。
+                    // 采用去抖动，等待 250ms 后再统一重新加载，保证读取到稳定内容。
+                    console.log('File changed (debounced reload scheduled):', message.data);
+                    setIsLoading(true);
+                    if (reloadTimerRef.current) {
+                        clearTimeout(reloadTimerRef.current);
+                    }
+                    reloadTimerRef.current = setTimeout(() => {
+                        vscode.postMessage({ command: 'loadDesignFiles' });
+                        reloadTimerRef.current = null;
+                    }, 250);
                     break;
             }
         };
@@ -608,11 +616,19 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
 
     const handleReloadDesignFiles = () => {
         try {
-            setIsLoading(true);
-            const loadMessage: WebviewMessage = { command: 'loadDesignFiles' };
-            vscode.postMessage(loadMessage);
+            // 触发扩展侧“完全重建画板”，效果等同手动关闭后重新打开
+            const reloadMessage: WebviewMessage = { command: 'reloadCanvas' as any };
+            vscode.postMessage(reloadMessage);
         } catch (e) {
-            console.error('Failed to request design files reload:', e);
+            console.error('Failed to request canvas reload:', e);
+            // 回退：若重载失败，退回到仅重新加载设计文件
+            try {
+                setIsLoading(true);
+                const loadMessage: WebviewMessage = { command: 'loadDesignFiles' };
+                vscode.postMessage(loadMessage);
+            } catch (err2) {
+                console.error('Failed to request design files reload (fallback):', err2);
+            }
         }
     };
 
@@ -845,8 +861,8 @@ const CanvasView: React.FC<CanvasViewProps> = ({ vscode, nonce }) => {
                                 : position;
                             
                             return (
-                                <DesignFrame
-                                    key={`${file.name}_${(file.modified as any && (file.modified as any).getTime ? (file.modified as any).getTime() : Date.now())}`}
+                        <DesignFrame
+                                    key={`${file.name}_${(typeof (file as any).modified === 'string' ? Date.parse((file as any).modified) : ((file as any).modified && (file as any).modified.getTime ? (file as any).modified.getTime() : Date.now()))}_${file.size}`}
                                     file={file}
                                     position={finalPosition}
                                     dimensions={{ width: actualWidth, height: actualHeight }}
